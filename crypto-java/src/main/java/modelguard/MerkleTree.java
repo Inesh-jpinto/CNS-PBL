@@ -88,6 +88,25 @@ public class MerkleTree {
         return current.equals(root);
     }
 
+    /**
+     * Compare two lists of leaf hashes and return the indices where they differ.
+     * Used by the verifier to localize exactly which layers were tampered.
+     */
+    public static List<Integer> findMismatchedLeaves(List<String> original, List<String> recomputed) {
+        List<Integer> mismatched = new ArrayList<>();
+        int n = Math.min(original.size(), recomputed.size());
+        for (int i = 0; i < n; i++) {
+            if (!original.get(i).equals(recomputed.get(i))) {
+                mismatched.add(i);
+            }
+        }
+        // Extra leaves in recomputed (not in original) are also mismatches
+        for (int i = n; i < recomputed.size(); i++) {
+            mismatched.add(i);
+        }
+        return mismatched;
+    }
+
     /** Print tree structure for debugging. */
     public void printTree() {
         System.out.println("=== Merkle Tree ===");

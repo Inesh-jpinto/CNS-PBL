@@ -12,7 +12,7 @@ const navGroups = [
   {
     label: "OVERVIEW",
     items: [
-      { to: "/", label: "Dashboard", icon: <LayoutDashboard size={16} />, tag: "DB" },
+      { to: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={16} />, tag: "DB" },
       { to: "/analytics", label: "Security Analytics", icon: <BarChart3 size={16} />, tag: "AN" },
       { to: "/activity", label: "Activity Timeline", icon: <Activity size={16} />, tag: "AT" },
       { to: "/notifications", label: "Notifications", icon: <Bell size={16} />, tag: "NT", badge: true },
@@ -22,10 +22,12 @@ const navGroups = [
     label: "VERIFICATION",
     items: [
       { to: "/models/upload", label: "Model Upload", icon: <Upload size={16} />, tag: "UP" },
+      { to: "/models/publish", label: "Publish Model", icon: <FileKey size={16} />, tag: "PB" },
       { to: "/verification/hash", label: "Hash Verification", icon: <Hash size={16} />, tag: "H#" },
       { to: "/verification/layers", label: "Layer Hashing", icon: <Layers size={16} />, tag: "LH" },
       { to: "/verification/merkle", label: "Merkle Tree", icon: <Network size={16} />, tag: "MT" },
       { to: "/verification/signature", label: "Digital Signature", icon: <FileKey size={16} />, tag: "DS" },
+      { to: "/verification/elgamal", label: "ElGamal Demo", icon: <GitCompare size={16} />, tag: "EG" },
       { to: "/verification/comparison", label: "Hash Comparison", icon: <GitCompare size={16} />, tag: "HC" },
     ],
   },
@@ -55,6 +57,7 @@ const navGroups = [
       { to: "/security/attack-simulator", label: "Attack Simulator", icon: <Zap size={16} />, tag: "AS" },
       { to: "/security/risk", label: "Risk Assessment", icon: <AlertTriangle size={16} />, tag: "RA" },
       { to: "/security/metadata", label: "Metadata Protection", icon: <Lock size={16} />, tag: "MP" },
+      { to: "/security/keys", label: "Key Management", icon: <Settings size={16} />, tag: "KM" },
     ],
   },
   {
@@ -65,6 +68,7 @@ const navGroups = [
     ],
   },
 ];
+
 
 export default function Sidebar() {
   const { sidebarOpen, setSidebarOpen, unreadCount } = useModel();

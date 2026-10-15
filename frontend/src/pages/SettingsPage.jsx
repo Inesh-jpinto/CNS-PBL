@@ -91,12 +91,12 @@ export default function SettingsPage() {
                   display: "grid", placeItems: "center",
                   fontSize: 16, fontWeight: 700, color: "#0b0e14"
                 }}>
-                  {userProfile?.initials || "SA"}
+                  {userProfile?.initials || "IP"}
                 </div>
                 <div>
-                  <strong style={{ fontSize: 14, color: "var(--text-primary)" }}>{userProfile?.name || "Saria Alvarez"}</strong>
+                  <strong style={{ fontSize: 14, color: "var(--text-primary)" }}>{userProfile?.name || "Inesh Jeethan Pinto"}</strong>
                   <span style={{ display: "block", fontSize: 12, color: "var(--cyan)" }}>{userProfile?.role || "Security Admin"}</span>
-                  <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>{userProfile?.email || "saria.alvarez@modelguard.io"}</span>
+                  <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>{userProfile?.email || "inesh.pinto@modelguard.io"}</span>
                 </div>
               </div>
 

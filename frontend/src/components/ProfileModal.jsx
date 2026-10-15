@@ -13,9 +13,9 @@ const GRADIENT_PRESETS = [
 export default function ProfileModal() {
   const { userProfile, updateProfile, profileModalOpen, setProfileModalOpen } = useModel();
 
-  const [name, setName] = useState(userProfile?.name || "Saria Alvarez");
+  const [name, setName] = useState(userProfile?.name || "Inesh Jeethan Pinto");
   const [role, setRole] = useState(userProfile?.role || "Security Admin");
-  const [email, setEmail] = useState(userProfile?.email || "saria.alvarez@modelguard.io");
+  const [email, setEmail] = useState(userProfile?.email || "inesh.pinto@modelguard.io");
   const [avatarColor, setAvatarColor] = useState(userProfile?.avatarColor || GRADIENT_PRESETS[0]);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
@@ -42,7 +42,7 @@ export default function ProfileModal() {
   const parts = name.trim().split(" ");
   const currentInitials = parts.length >= 2 
     ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-    : (parts[0] ? parts[0].substring(0, 2).toUpperCase() : "SA");
+    : (parts[0] ? parts[0].substring(0, 2).toUpperCase() : "IP");
 
   return (
     <div className="modal-overlay" onClick={() => setProfileModalOpen(false)}>
@@ -109,7 +109,7 @@ export default function ProfileModal() {
               className="text-input"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="e.g. Saria Alvarez"
+              placeholder="e.g. Inesh Jeethan Pinto"
               style={{
                 width: "100%", padding: "10px 12px", background: "var(--surface)",
                 border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-primary)"
@@ -145,7 +145,7 @@ export default function ProfileModal() {
               className="text-input"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="e.g. saria.alvarez@modelguard.io"
+              placeholder="e.g. inesh.pinto@modelguard.io"
               style={{
                 width: "100%", padding: "10px 12px", background: "var(--surface)",
                 border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-primary)"

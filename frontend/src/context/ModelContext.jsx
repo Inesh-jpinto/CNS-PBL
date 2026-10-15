@@ -1,15 +1,25 @@
-import { createContext, useContext, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { jsPDF } from "jspdf";
 import { initialLayers, initialHistory, publishers } from "../utils/data";
-import { generateDemoHash, detectModelType } from "../utils/crypto";
+import { generateDemoHash, detectModelType, getTamperPercentageForModel } from "../utils/crypto";
 
 const ModelContext = createContext(null);
 
+/**
+ * Format current timestamp from the user's system clock only.
+ */
+export function formatSystemTime(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+  const dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  return `${timeStr} · ${dateStr}`;
+}
+
 const DEFAULT_PROFILE = {
-  name: "Saria Alvarez",
+  name: "Inesh Jeethan Pinto",
   role: "Security Admin",
-  email: "saria.alvarez@modelguard.io",
-  initials: "SA",
+  email: "inesh.pinto@modelguard.io",
+  initials: "IP",
   avatarColor: "linear-gradient(135deg, #00f2fe, #4facfe)"
 };
 
@@ -31,19 +41,140 @@ export function ModelProvider({ children }) {
   const [attackActive, setAttackActive] = useState(false);
   const [history, setHistory] = useState(initialHistory);
   const [copiedHash, setCopiedHash] = useState("");
-  const [notifications, setNotifications] = useState([
-    { id: 1, type: "tamper", title: "Tampering Detected", detail: "custom-fraud-detector — layer 4 hash mismatch", time: "14 min ago", read: false },
-    { id: 2, type: "warning", title: "Signature Warning", detail: "bert-base-uncased — signature expiring in 7 days", time: "1 hr ago", read: false },
-    { id: 3, type: "scan", title: "Scan Complete", detail: "stable-diffusion-xl scan queued", time: "5 min ago", read: true },
-    { id: 4, type: "publisher", title: "Publisher Verified", detail: "Google DeepMind Labs public key verified", time: "30 min ago", read: true },
-  ]);
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      const saved = localStorage.getItem("modelguard_notifications");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [
+      { id: 1, type: "tamper", title: "Tampering Detected", detail: "custom-fraud-detector — layer 4 hash mismatch", time: "14 min ago", read: false },
+      { id: 2, type: "warning", title: "Signature Warning", detail: "bert-base-uncased — signature expiring in 7 days", time: "1 hr ago", read: false },
+      { id: 3, type: "scan", title: "Scan Complete", detail: "stable-diffusion-xl scan queued", time: "5 min ago", read: true },
+      { id: 4, type: "publisher", title: "Publisher Verified", detail: "Google DeepMind Labs public key verified", time: "30 min ago", read: true },
+    ];
+  });
+  const DEFAULT_MODELS = [
+    {
+      id: 1001,
+      fileName: "original_model.pth",
+      fileSize: "71.91 KB",
+      modelType: "PyTorch Model (.pth)",
+      uploadTime: formatSystemTime(new Date(Date.now() - 3600000)),
+      status: "VERIFIED",
+      totalLayers: 6,
+      verifiedLayersCount: 6,
+      tamperedLayersCount: 0,
+      intactPercentage: 100,
+      tamperPercentage: 0,
+      tamperedLayers: [],
+      layers: [
+        { id: 1, name: "fc1.bias", type: "Linear Layer", status: "verified", hash: "5799933b9bb8134731a54b38d3ad4bc0082" },
+        { id: 2, name: "fc1.weight", type: "Linear Weights", status: "verified", hash: "aeeb6c0f329bb63bb912df082bc85d116c2" },
+        { id: 3, name: "fc2.bias", type: "Linear Layer", status: "verified", hash: "70e0695cf103233efebad2a11b6238b1f23" },
+        { id: 4, name: "fc2.weight", type: "Linear Weights", status: "verified", hash: "b8c20c949646b9a8bc43d41f3e74b33ca82" },
+        { id: 5, name: "fc3.bias", type: "Linear Layer", status: "verified", hash: "d0049b1e95cfc424075196324b17ad56563" },
+        { id: 6, name: "fc3.weight", type: "Output Layer", status: "verified", hash: "d6f97944ae6585141b71aa5a3bc3224b819" },
+      ],
+    },
+    {
+      id: 1002,
+      fileName: "tampered_model.pth",
+      fileSize: "71.91 KB",
+      modelType: "PyTorch Model (.pth)",
+      uploadTime: formatSystemTime(new Date(Date.now() - 1800000)),
+      status: "FAILED",
+      totalLayers: 6,
+      verifiedLayersCount: 5,
+      tamperedLayersCount: 1,
+      intactPercentage: Number((100 - getTamperPercentageForModel("tampered_model.pth")).toFixed(1)),
+      tamperPercentage: getTamperPercentageForModel("tampered_model.pth"),
+      tamperedLayers: ["fc1.weight"],
+      layers: [
+        { id: 1, name: "fc1.bias", type: "Linear Layer", status: "verified", hash: "5799933b9bb8134731a54b38d3ad4bc0082" },
+        { id: 2, name: "fc1.weight", type: "Linear Weights", status: "tampered", hash: "5485c323f4b009e88dca8026db4f6ee388a" },
+        { id: 3, name: "fc2.bias", type: "Linear Layer", status: "verified", hash: "70e0695cf103233efebad2a11b6238b1f23" },
+        { id: 4, name: "fc2.weight", type: "Linear Weights", status: "verified", hash: "b8c20c949646b9a8bc43d41f3e74b33ca82" },
+        { id: 5, name: "fc3.bias", type: "Linear Layer", status: "verified", hash: "d0049b1e95cfc424075196324b17ad56563" },
+        { id: 6, name: "fc3.weight", type: "Output Layer", status: "verified", hash: "d6f97944ae6585141b71aa5a3bc3224b819" },
+      ],
+    },
+    {
+      id: 1003,
+      fileName: "resnet50_v2.onnx",
+      fileSize: "97.8 MB",
+      modelType: "ONNX Graph (.onnx)",
+      uploadTime: formatSystemTime(new Date(Date.now() - 600000)),
+      status: "VERIFIED",
+      totalLayers: 8,
+      verifiedLayersCount: 8,
+      tamperedLayersCount: 0,
+      intactPercentage: 100,
+      tamperPercentage: 0,
+      tamperedLayers: [],
+      layers: [
+        { id: 1, name: "conv1.weight", type: "Convolution 2D", status: "verified", hash: "c0183b9e89d554a938c381f9a8427160" },
+        { id: 2, name: "bn1.weight", type: "BatchNorm 2D", status: "verified", hash: "a492cf9018d488e09f1883c842661852" },
+        { id: 3, name: "layer1.0.conv1.weight", type: "ResBlock Conv", status: "verified", hash: "89cb32ef81938fe74892c90e18371901" },
+        { id: 4, name: "layer2.0.conv1.weight", type: "ResBlock Conv", status: "verified", hash: "3910dbfe728198f24901ca9e87219504" },
+        { id: 5, name: "layer3.0.conv1.weight", type: "ResBlock Conv", status: "verified", hash: "90da772183cb91e0a8427e1937f28190" },
+        { id: 6, name: "layer4.0.conv1.weight", type: "ResBlock Conv", status: "verified", hash: "28e08bca91f2498e831bca01e7492048" },
+        { id: 7, name: "fc.weight", type: "Linear Layer", status: "verified", hash: "77ac3218bf03810ecba98197e4198246" },
+        { id: 8, name: "fc.bias", type: "Linear Bias", status: "verified", hash: "11de802094ca981fe7842ba901847120" },
+      ],
+    },
+    {
+      id: 1004,
+      fileName: "bert_large_backdoor_injected.safetensors",
+      fileSize: "1.34 GB",
+      modelType: "HuggingFace SafeTensors",
+      uploadTime: formatSystemTime(new Date(Date.now() - 300000)),
+      status: "FAILED",
+      totalLayers: 12,
+      verifiedLayersCount: 8,
+      tamperedLayersCount: 4,
+      intactPercentage: Number((100 - getTamperPercentageForModel("bert_large_backdoor_injected.safetensors")).toFixed(1)),
+      tamperPercentage: getTamperPercentageForModel("bert_large_backdoor_injected.safetensors"),
+      tamperedLayers: ["encoder.layer.9.attention.self.query.weight", "encoder.layer.9.attention.self.key.weight", "encoder.layer.10.output.dense.weight", "encoder.layer.11.output.dense.bias"],
+      layers: [
+        { id: 1, name: "embeddings.word_embeddings.weight", type: "Embedding", status: "verified", hash: "99aa81273bd5819cae90184719283719" },
+        { id: 2, name: "embeddings.position_embeddings.weight", type: "Positional Embedding", status: "verified", hash: "12fe9834bac819273918a84719204918" },
+        { id: 3, name: "encoder.layer.0.attention.self.query.weight", type: "Attention Head", status: "verified", hash: "44cb9120de8471920ae8472910481729" },
+        { id: 4, name: "encoder.layer.3.attention.self.query.weight", type: "Attention Head", status: "verified", hash: "38fa091bd3e481928471982739182734" },
+        { id: 5, name: "encoder.layer.6.output.dense.weight", type: "Feed Forward", status: "verified", hash: "89112cad88e918274910482910481729" },
+        { id: 6, name: "encoder.layer.8.output.dense.weight", type: "Feed Forward", status: "verified", hash: "771a3994bb0182739182739104819283" },
+        { id: 7, name: "encoder.layer.9.attention.self.query.weight", type: "Attention Head", status: "tampered", hash: "e8293710aac819274910482910481928" },
+        { id: 8, name: "encoder.layer.9.attention.self.key.weight", type: "Attention Head", status: "tampered", hash: "ff8012eec89182749104829104819283" },
+        { id: 9, name: "encoder.layer.10.output.dense.weight", type: "Feed Forward", status: "tampered", hash: "c38910eb441827491048291048192839" },
+        { id: 10, name: "encoder.layer.11.output.dense.bias", type: "Dense Bias", status: "tampered", hash: "da781190bc2819274910482910481928" },
+        { id: 11, name: "pooler.dense.weight", type: "Pooler", status: "verified", hash: "661298ca419283719283719283719283" },
+        { id: 12, name: "pooler.dense.bias", type: "Pooler Bias", status: "verified", hash: "55091aef678192837192837192837192" },
+      ],
+    }
+  ];
+
+  const [uploadedModels, setUploadedModels] = useState(() => {
+    try {
+      const saved = localStorage.getItem("modelguard_uploaded_models");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return DEFAULT_MODELS;
+  });
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   const [userProfile, setUserProfile] = useState(() => {
     try {
       const saved = localStorage.getItem("modelguard_user_profile");
-      return saved ? JSON.parse(saved) : DEFAULT_PROFILE;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.name && parsed.name !== "Saria Alvarez") {
+          return parsed;
+        }
+      }
+      return DEFAULT_PROFILE;
     } catch {
       return DEFAULT_PROFILE;
     }
@@ -61,6 +192,48 @@ export function ModelProvider({ children }) {
     const combined = layers.map(l => l.hash).join("");
     return generateDemoHash(combined || "modelguard");
   }, [layers]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("modelguard_notifications", JSON.stringify(notifications));
+    } catch {}
+  }, [notifications]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("modelguard_uploaded_models", JSON.stringify(uploadedModels));
+    } catch {}
+  }, [uploadedModels]);
+
+  function clearUploadedModels() {
+    setUploadedModels([]);
+    try {
+      localStorage.removeItem("modelguard_uploaded_models");
+    } catch {}
+  }
+
+  function addNotification({ type = "upload", title, detail, time }) {
+    const systemTime = time || formatSystemTime(new Date());
+    const newNotif = {
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      type,
+      title,
+      detail,
+      time: systemTime,
+      read: false,
+      timestamp: Date.now(),
+    };
+    setNotifications(prev => [newNotif, ...prev]);
+    return newNotif;
+  }
+
+  function deleteNotification(id) {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  }
+
+  function clearAllNotifications() {
+    setNotifications([]);
+  }
 
   function updateProfile(updatedData) {
     setUserProfile(prev => {
@@ -105,6 +278,18 @@ export function ModelProvider({ children }) {
 
   function handleFileUpload(file) {
     if (!file) return;
+
+    // Capture the exact upload time directly from the system clock
+    const uploadSystemTime = formatSystemTime(new Date());
+
+    // Automatically push an upload notification to the notifications center
+    addNotification({
+      type: "upload",
+      title: "Model File Uploaded",
+      detail: `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB) — cryptographic layer inspection started`,
+      time: uploadSystemTime,
+    });
+
     setModelFile(file);
     setModelName(file.name);
     setModelType(detectModelType(file.name));
@@ -142,8 +327,107 @@ export function ModelProvider({ children }) {
       setSignatureStatus(isTampered ? "Invalid" : "Valid");
       setPublisherStatus(selectedPublisher ? "Trusted" : "No Publisher Selected");
       setIsVerifying(false);
-      setHistory(h => [{ id: Date.now(), model: file.name, version: "v1.0.0", result: isTampered ? "FAILED" : "PASSED", time: "Just Now", publisher: selectedPublisher || "Unknown", score: isTampered ? 45 : 100 }, ...h]);
+
+      const completionSystemTime = formatSystemTime(new Date());
+      addNotification({
+        type: isTampered ? "tamper" : "verified",
+        title: isTampered ? "Tampering Detected" : "Cryptographic Scan Completed",
+        detail: isTampered
+          ? `${file.name} — Layer #${corruptLayerIdx} hash mismatch detected`
+          : `${file.name} — All layers verified & intact (Merkle Root matched)`,
+        time: completionSystemTime,
+      });
+
+      const verifiedCount = generatedLayers.filter(l => l.status === "verified").length;
+      const tamperedCount = generatedLayers.filter(l => l.status === "tampered").length;
+      const totalCount = generatedLayers.length;
+      
+      const tamperPct = isTampered ? getTamperPercentageForModel(file.name) : 0;
+      const intactPct = isTampered ? Number((100 - tamperPct).toFixed(1)) : 100;
+      const tamperedNames = generatedLayers.filter(l => l.status === "tampered").map(l => l.name);
+
+      const formattedSize = file.size < 1024 * 1024
+        ? `${(file.size / 1024).toFixed(2)} KB`
+        : `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+
+      const modelEntry = {
+        id: Date.now(),
+        fileName: file.name,
+        fileSize: formattedSize,
+        modelType: detectModelType(file.name),
+        uploadTime: uploadSystemTime,
+        completionTime: completionSystemTime,
+        status: isTampered ? "FAILED" : "VERIFIED",
+        totalLayers: totalCount,
+        verifiedLayersCount: verifiedCount,
+        tamperedLayersCount: tamperedCount,
+        intactPercentage: intactPct,
+        tamperPercentage: tamperPct,
+        tamperedLayers: tamperedNames,
+        layers: generatedLayers.map(l => ({
+          id: l.id,
+          name: l.name,
+          type: l.type,
+          status: l.status,
+          hash: l.hash,
+        })),
+      };
+
+      setUploadedModels(prev => [modelEntry, ...prev.filter(m => m.fileName !== file.name)]);
+
+      setHistory(h => [{ 
+        id: Date.now(), 
+        model: file.name, 
+        version: "v1.0.0", 
+        result: isTampered ? "FAILED" : "PASSED", 
+        time: completionSystemTime, 
+        publisher: selectedPublisher || "Unknown", 
+        score: isTampered ? 45 : 100 
+      }, ...h]);
     }, 2500);
+  }
+
+  function registerUploadedModelResult(file, resultData) {
+    if (!file) return;
+    const uploadSystemTime = formatSystemTime(new Date());
+    const isOk = resultData?.valid ?? true;
+    const layerList = resultData?.layers || [];
+    const totalCount = layerList.length || 6;
+    const tamperedCount = layerList.filter(l => l.status === "tampered" || l.tampered || l.valid === false).length;
+    const verifiedCount = Math.max(totalCount - tamperedCount, 0);
+    
+    const isTamperedModel = !isOk || tamperedCount > 0;
+    const tamperPct = isTamperedModel ? getTamperPercentageForModel(file.name) : 0;
+    const intactPct = isTamperedModel ? Number((100 - tamperPct).toFixed(1)) : 100;
+
+    const formattedSize = file.size < 1024 * 1024
+      ? `${(file.size / 1024).toFixed(2)} KB`
+      : `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+
+    const modelEntry = {
+      id: Date.now(),
+      fileName: file.name,
+      fileSize: formattedSize,
+      modelType: detectModelType(file.name),
+      uploadTime: uploadSystemTime,
+      completionTime: uploadSystemTime,
+      status: isOk ? "VERIFIED" : "FAILED",
+      totalLayers: totalCount,
+      verifiedLayersCount: verifiedCount,
+      tamperedLayersCount: tamperedCount,
+      intactPercentage: intactPct,
+      tamperPercentage: tamperPct,
+      tamperedLayers: layerList.filter(l => l.status === "tampered" || l.tampered || l.valid === false).map(l => l.name || l.layer_name),
+      layers: layerList.map((l, i) => ({
+        id: i + 1,
+        name: l.name || l.layer_name || `layer_${i + 1}`,
+        type: l.type || "Neural Layer",
+        status: (l.status === "tampered" || l.tampered || l.valid === false) ? "tampered" : "verified",
+        hash: l.hash || l.computed_hash || "hash_verified",
+      })),
+    };
+
+    setUploadedModels(prev => [modelEntry, ...prev.filter(m => m.fileName !== file.name)]);
   }
 
 
@@ -173,7 +457,18 @@ export function ModelProvider({ children }) {
       setSignatureStatus(tampered ? "Invalid" : "Valid");
       setVerificationProgress(100);
       setIsVerifying(false);
-      setHistory(h => [{ id: Date.now(), model: modelName, version: "v1.0.0", result: tampered ? "FAILED" : "PASSED", time: "Just Now", publisher: selectedPublisher || "Unknown", score: tampered ? 45 : 100 }, ...h]);
+      const verifyTime = formatSystemTime(new Date());
+
+      addNotification({
+        type: tampered ? "tamper" : "verified",
+        title: tampered ? "Integrity Check Failed" : "Integrity Check Passed",
+        detail: tampered
+          ? `${modelName} — Tampering detected in model layers`
+          : `${modelName} — Digital signature and layer hashes verified`,
+        time: verifyTime,
+      });
+
+      setHistory(h => [{ id: Date.now(), model: modelName, version: "v1.0.0", result: tampered ? "FAILED" : "PASSED", time: verifyTime, publisher: selectedPublisher || "Unknown", score: tampered ? 45 : 100 }, ...h]);
     }, 2200);
   }
 
@@ -184,22 +479,67 @@ export function ModelProvider({ children }) {
 
   function simulateTampering() {
     setAttackActive(true);
-    setLayers(ls => ls.map(layer =>
+    const updatedLayers = layers.map(layer =>
       layer.id === Number(attackLayer)
         ? { ...layer, status: "tampered", hash: generateDemoHash(`TAMPERED-${Date.now()}-${layer.name}`) }
         : layer
-    ));
+    );
+    setLayers(updatedLayers);
     setVerificationStatus("TAMPERED");
     setSignatureStatus("Invalid");
+
+    if (modelName && modelName !== "No Model Uploaded") {
+      const verifiedCount = updatedLayers.filter(l => l.status === "verified").length;
+      const tamperedCount = updatedLayers.filter(l => l.status === "tampered").length;
+      const totalCount = updatedLayers.length;
+      const tamperPct = getTamperPercentageForModel(modelName);
+      const intactPct = Number((100 - tamperPct).toFixed(1));
+      const tamperedNames = updatedLayers.filter(l => l.status === "tampered").map(l => l.name);
+
+      setUploadedModels(prev => prev.map(m => {
+        if (m.fileName === modelName) {
+          return {
+            ...m,
+            status: "FAILED",
+            verifiedLayersCount: verifiedCount,
+            tamperedLayersCount: tamperedCount,
+            intactPercentage: intactPct,
+            tamperPercentage: tamperPct,
+            tamperedLayers: tamperedNames,
+            layers: updatedLayers.map(l => ({ id: l.id, name: l.name, type: l.type, status: l.status, hash: l.hash })),
+          };
+        }
+        return m;
+      }));
+    }
   }
 
   function resetAttack() {
     setAttackActive(false);
-    setLayers(ls => ls.map(layer => ({
+    const restoredLayers = layers.map(layer => ({
       ...layer, status: "verified", hash: generateDemoHash(`${modelName}-${layer.id}-safe`),
-    })));
+    }));
+    setLayers(restoredLayers);
     setVerificationStatus(modelFile ? "VERIFIED" : "READY");
     setSignatureStatus(modelFile ? "Valid" : "Not Verified");
+
+    if (modelName && modelName !== "No Model Uploaded") {
+      setUploadedModels(prev => prev.map(m => {
+        if (m.fileName === modelName) {
+          return {
+            ...m,
+            status: "VERIFIED",
+            verifiedLayersCount: restoredLayers.length,
+            tamperedLayersCount: 0,
+            intactPercentage: 100,
+            tamperPercentage: 0,
+            tamperedLayers: [],
+            layers: restoredLayers.map(l => ({ id: l.id, name: l.name, type: l.type, status: l.status, hash: l.hash })),
+          };
+        }
+        return m;
+      }));
+    }
   }
 
   async function copyHash(hash) {
@@ -342,15 +682,6 @@ export function ModelProvider({ children }) {
       doc.text("SHA-256 Digest", 145, y + 5.5);
       y += 8;
 
-      data.layers.forEach((l, idx) => {
-        if (y > 270) {
-          doc.addPage();
-          y = 20;
-        }
-        if (idx % 2 === 1) {
-          doc.setFillColor(248, 250, 252);
-          doc.rect(14, y, 182, 7.5, "F");
-        }
       data.layers.forEach((l, idx) => {
         if (y > 230) {
           doc.addPage();
@@ -498,6 +829,9 @@ export function ModelProvider({ children }) {
     simulateTampering, resetAttack,
     copyHash, downloadReport,
     markAllRead, markRead,
+    addNotification, deleteNotification, clearAllNotifications,
+    formatSystemTime,
+    uploadedModels, setUploadedModels, clearUploadedModels, registerUploadedModelResult,
     publishers,
   };
 

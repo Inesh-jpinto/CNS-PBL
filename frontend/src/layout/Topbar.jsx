@@ -137,11 +137,11 @@ export default function Topbar() {
                 boxShadow: "0 2px 8px rgba(0,0,0,0.2)"
               }}
             >
-              {userProfile?.initials || "SA"}
+              {userProfile?.initials || "IP"}
             </div>
             <div style={{ textAlign: "left", lineHeight: 1.2 }}>
               <div className="profile-name" style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-primary)" }}>
-                {userProfile?.name || "Saria Alvarez"}
+                {userProfile?.name || "Inesh Jeethan Pinto"}
               </div>
               <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
                 {userProfile?.role || "Security Admin"}

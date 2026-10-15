@@ -2,15 +2,29 @@ import { useState } from 'react'
 import axios from 'axios'
 import FileUpload from '../components/FileUpload'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { useModel } from '../context/ModelContext'
 
 const API = 'http://localhost:8000'
 
 export default function PublishPage() {
+  const { addNotification, formatSystemTime } = useModel()
   const [modelFile, setModelFile]     = useState(null)
   const [publisher, setPublisher]     = useState('ModelGuard Team')
   const [loading, setLoading]         = useState(false)
   const [error, setError]             = useState(null)
   const [manifest, setManifest]       = useState(null)
+
+  const handleModelSelect = (file) => {
+    setModelFile(file)
+    if (file && addNotification) {
+      addNotification({
+        type: "upload",
+        title: "Model File Uploaded (Publish)",
+        detail: `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB) — ready for Merkle publishing & signature`,
+        time: formatSystemTime(new Date()),
+      })
+    }
+  }
 
   const handlePublish = async () => {
     if (!modelFile || loading) return
@@ -28,6 +42,15 @@ export default function PublishPage() {
         timeout: 120000,
       })
       setManifest(data.manifest)
+
+      if (addNotification) {
+        addNotification({
+          type: "publisher",
+          title: "Model Manifest Published",
+          detail: `${modelFile.name} signed & manifest generated for ${publisher}`,
+          time: formatSystemTime(new Date()),
+        })
+      }
     } catch (err) {
       setError(err.response?.data?.detail || err.message || 'Unknown error')
     } finally {
@@ -75,7 +98,7 @@ export default function PublishPage() {
                   accept=".pt,.pth,.safetensors,.onnx"
                   hint=".pt  .pth  .safetensors  .onnx"
                   file={modelFile}
-                  onFile={setModelFile}
+                  onFile={handleModelSelect}
                 />
               </div>
 

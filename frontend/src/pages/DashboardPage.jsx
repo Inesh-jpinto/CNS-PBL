@@ -8,21 +8,61 @@ import { useModel } from "../context/ModelContext";
 import StatCard from "../components/StatCard";
 import StatusBadge from "../components/StatusBadge";
 import { registeredModels } from "../utils/data";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 export default function DashboardPage() {
   const {
     verifiedLayers, tamperedLayers, securityScore, merkleRoot,
     signatureStatus, modelName, modelType, verificationStatus,
     layers, openFileSelector, verifyModel, setReportModalOpen,
+    uploadedModels,
   } = useModel();
   const navigate = useNavigate();
   const [filter, setFilter] = useState("All");
 
-  const filteredModels = registeredModels.filter(m => {
-    if (filter === "All") return true;
-    return m.status === filter.toLowerCase();
-  });
+  // Merge user's actual uploaded files with standard registered registry models
+  const allDisplayModels = useMemo(() => {
+    const userUploadedFormatted = (uploadedModels || []).map(m => {
+      const isTampered = m.status === "FAILED" || m.tamperPercentage > 0;
+      const risk = isTampered
+        ? (m.tamperPercentage > 30 ? 87 : m.tamperPercentage > 15 ? 45 : 25)
+        : 0;
+
+      return {
+        id: m.id,
+        name: m.fileName,
+        version: m.fileSize || "Uploaded",
+        framework: m.modelType?.includes("PyTorch")
+          ? "PyTorch"
+          : m.modelType?.includes("ONNX")
+          ? "ONNX"
+          : m.modelType?.includes("SafeTensors")
+          ? "SafeTensors"
+          : "Binary (.bin)",
+        publisher: isTampered ? "Unknown / Unverified" : "ModelGuard Registry",
+        status: isTampered ? "tampered" : "verified",
+        lastVerified: m.uploadTime || "Just now",
+        riskScore: risk,
+        isUploaded: true,
+        fileId: m.id,
+      };
+    });
+
+    // Avoid duplicate names if any
+    const existingNames = new Set(userUploadedFormatted.map(u => u.name));
+    const extraRegistered = registeredModels.filter(r => !existingNames.has(r.name));
+
+    return [...userUploadedFormatted, ...extraRegistered];
+  }, [uploadedModels]);
+
+  const filteredModels = useMemo(() => {
+    return allDisplayModels.filter(m => {
+      if (filter === "All") return true;
+      return m.status?.toLowerCase() === filter.toLowerCase();
+    });
+  }, [allDisplayModels, filter]);
+
+  const totalVerifiedCount = (1247 + (uploadedModels?.length || 0)).toLocaleString();
 
   return (
     <>
@@ -53,7 +93,7 @@ export default function DashboardPage() {
         <StatCard
           icon={<Layers />}
           title="Models Verified"
-          value="1,247"
+          value={totalVerifiedCount}
           description="Total verifications"
           valueClass="success-text"
           onClick={() => navigate("/records/history")}
@@ -69,16 +109,16 @@ export default function DashboardPage() {
         <StatCard
           icon={<AlertTriangle />}
           title="Tampered Detected"
-          value="3"
-          description="Models flagged today"
+          value={uploadedModels?.filter(m => m.tamperPercentage > 0).length || "3"}
+          description="Models flagged"
           valueClass="danger-text"
           onClick={() => navigate("/security/risk")}
         />
         <StatCard
           icon={<ScanSearch />}
           title="Active Scans"
-          value="12"
-          description="Currently scanning"
+          value={uploadedModels?.length || "12"}
+          description="Files registered"
           onClick={() => navigate("/models/upload")}
         />
       </section>
@@ -155,9 +195,12 @@ export default function DashboardPage() {
       {/* Recent Verifications Table */}
       <section className="panel layers-panel">
         <div className="panel-header">
-          <div><h3>Recent Verifications</h3><p>Latest model security checks</p></div>
+          <div>
+            <h3>Recent Verifications ({allDisplayModels.length})</h3>
+            <p>All uploaded model files and security checks</p>
+          </div>
           <div className="chip-group">
-            {["All","verified","scanning","tampered","warning"].map(f => (
+            {["All", "verified", "scanning", "tampered", "warning"].map(f => (
               <button key={f} className={`chip${filter === f ? " on" : ""}`} onClick={() => setFilter(f === "All" ? "All" : f)}>
                 {f === "All" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
@@ -168,8 +211,13 @@ export default function DashboardPage() {
           <table>
             <thead>
               <tr>
-                <th>Model</th><th>Framework</th><th>Publisher</th>
-                <th>Status</th><th>Last Verified</th><th>Risk</th><th>Actions</th>
+                <th>Model File</th>
+                <th>Framework</th>
+                <th>Publisher / Origin</th>
+                <th>Status</th>
+                <th>Last Verified</th>
+                <th>Risk Score</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -184,7 +232,7 @@ export default function DashboardPage() {
                   <td>{m.framework}</td>
                   <td>{m.publisher}</td>
                   <td><StatusBadge status={m.status} /></td>
-                  <td>{m.lastVerified}</td>
+                  <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem" }}>{m.lastVerified}</td>
                   <td>
                     <span className={`risk-badge ${m.riskScore > 70 ? "risk-high" : m.riskScore > 30 ? "risk-med" : "risk-low"}`}>
                       {m.riskScore}%
@@ -192,26 +240,45 @@ export default function DashboardPage() {
                   </td>
                   <td>
                     <div className="row-actions">
-                      {m.status === "tampered" ? (
-                        <button className="action-btn danger" onClick={() => navigate(`/security/attack-simulator?model=${m.id}`)}>
-                          <Zap size={13} /> Investigate
-                        </button>
-                      ) : m.status === "scanning" ? (
-                        <button className="action-btn" onClick={() => navigate("/models/upload")}>
-                          <ScanSearch size={13} /> Scan
-                        </button>
-                      ) : m.status === "warning" ? (
-                        <button className="action-btn warning" onClick={() => navigate(`/models/${m.id}`)}>
-                          <Eye size={13} /> Review
-                        </button>
+                      {m.isUploaded ? (
+                        <>
+                          {m.status === "tampered" ? (
+                            <button className="action-btn danger" onClick={() => navigate(`/analytics/file/${m.fileId}`)}>
+                              <Zap size={13} /> Investigate
+                            </button>
+                          ) : (
+                            <button className="action-btn success" onClick={() => navigate(`/analytics/file/${m.fileId}`)}>
+                              <Eye size={13} /> View
+                            </button>
+                          )}
+                          <button className="action-btn" onClick={() => navigate(`/analytics/file/${m.fileId}`)}>
+                            <Search size={13} /> Details
+                          </button>
+                        </>
                       ) : (
-                        <button className="action-btn success" onClick={() => navigate(`/models/${m.id}`)}>
-                          <Eye size={13} /> View
-                        </button>
+                        <>
+                          {m.status === "tampered" ? (
+                            <button className="action-btn danger" onClick={() => navigate(`/security/attack-simulator?model=${m.id}`)}>
+                              <Zap size={13} /> Investigate
+                            </button>
+                          ) : m.status === "scanning" ? (
+                            <button className="action-btn" onClick={() => navigate("/models/upload")}>
+                              <ScanSearch size={13} /> Scan
+                            </button>
+                          ) : m.status === "warning" ? (
+                            <button className="action-btn warning" onClick={() => navigate(`/models/${m.id}`)}>
+                              <Eye size={13} /> Review
+                            </button>
+                          ) : (
+                            <button className="action-btn success" onClick={() => navigate(`/models/${m.id}`)}>
+                              <Eye size={13} /> View
+                            </button>
+                          )}
+                          <button className="action-btn" onClick={() => navigate(`/models/${m.id}`)}>
+                            <Search size={13} /> Details
+                          </button>
+                        </>
                       )}
-                      <button className="action-btn" onClick={() => navigate(`/models/${m.id}`)}>
-                        <Search size={13} /> Details
-                      </button>
                     </div>
                   </td>
                 </tr>
@@ -220,7 +287,7 @@ export default function DashboardPage() {
           </table>
         </div>
         <div className="panel-footer">
-          <button className="link-btn" onClick={() => navigate("/models")}>View all models →</button>
+          <button className="link-btn" onClick={() => navigate("/analytics")}>View all model analytics →</button>
         </div>
       </section>
 

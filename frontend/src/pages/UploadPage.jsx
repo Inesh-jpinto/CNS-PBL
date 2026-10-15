@@ -14,7 +14,7 @@ const RECENT_MOCK = [
 
 export default function UploadPage() {
   const navigate = useNavigate()
-  const { handleFileUpload } = useModel()
+  const { handleFileUpload, addNotification, formatSystemTime, registerUploadedModelResult } = useModel()
   const [modelFile, setModelFile]       = useState(null)
   const [manifestFile, setManifestFile] = useState(null)
   const [loading, setLoading]           = useState(false)
@@ -40,6 +40,20 @@ export default function UploadPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 120000,
       })
+
+      if (registerUploadedModelResult && data.result) {
+        registerUploadedModelResult(modelFile, data.result);
+      }
+
+      if (addNotification) {
+        const isOk = data.result?.valid;
+        addNotification({
+          type: isOk ? "verified" : "tamper",
+          title: isOk ? "Model Verified Safe" : "Tampering Detected In Model",
+          detail: `${modelFile.name} — ${isOk ? "All layer hashes and RSA signature verified" : (data.result?.message || "Hash mismatch")}`,
+          time: formatSystemTime(new Date()),
+        });
+      }
 
       navigate('/result', { state: { result: data.result, modelName: modelFile.name } })
     } catch (err) {

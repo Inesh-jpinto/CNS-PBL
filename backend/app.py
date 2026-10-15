@@ -99,6 +99,75 @@ def health():
     return {"status": "ok", "service": "ModelGuard API"}
 
 
+@app.post("/api/keygen")
+def generate_keys():
+    """
+    Generate a fresh RSA-2048 key pair and persist it to publisher/keys/.
+    Returns the public key content (never returns the private key over the API).
+    """
+    try:
+        KEYS_DIR.mkdir(parents=True, exist_ok=True)
+        stdout, stderr, rc = run_java(["keygen", str(KEYS_DIR)])
+        if rc != 0:
+            raise HTTPException(status_code=500, detail=f"Key generation failed: {stderr}")
+
+        pub_key_path = KEYS_DIR / "public_key.pem"
+        if not pub_key_path.exists():
+            raise HTTPException(status_code=500, detail="Key generation succeeded but public_key.pem not found.")
+
+        return {
+            "success": True,
+            "message": "RSA-2048 key pair generated and stored on server.",
+            "public_key_pem": pub_key_path.read_text(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/elgamal-selftest")
+def elgamal_selftest(bit_length: int = 512):
+    """
+    Run the ElGamal signature self-test via the Java crypto service.
+    Returns pass/fail and raw stdout from the Java process.
+
+    Query params:
+      bit_length: prime size in bits (default 512; use 1024 for stronger test)
+    """
+    if bit_length not in (256, 512, 1024, 2048):
+        raise HTTPException(status_code=400, detail="bit_length must be one of: 256, 512, 1024, 2048")
+
+    stdout, stderr, rc = run_java(["elgamal-selftest", str(bit_length)], timeout=60)
+    return {
+        "success": rc == 0,
+        "bit_length": bit_length,
+        "result": "PASSED" if rc == 0 else "FAILED",
+        "output": stdout.strip(),
+        "error": stderr.strip() if rc != 0 else "",
+    }
+
+
+@app.post("/api/run-tests")
+def run_tests(suite: str = "all"):
+    """
+    Run the Java unit test suites (merkle / elgamal / tamper / all).
+    Returns the combined stdout output.
+    """
+    allowed = {"merkle", "elgamal", "tamper", "all"}
+    if suite not in allowed:
+        raise HTTPException(status_code=400, detail=f"suite must be one of: {allowed}")
+
+    mode = f"test-{suite}"
+    stdout, stderr, rc = run_java([mode], timeout=180)
+    return {
+        "success": rc == 0,
+        "suite": suite,
+        "output": stdout.strip(),
+        "error": stderr.strip() if rc != 0 else "",
+    }
+
+
 @app.get("/api/public-key")
 def get_public_key():
     """Return the trusted publisher public key as base64-encoded PEM."""
